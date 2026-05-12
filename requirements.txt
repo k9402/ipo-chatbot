@@ -1,0 +1,11 @@
+streamlit
+pydantic-ai
+dart-fss
+faiss-cpu
+beautifulsoup4
+lxml
+sentence-transformers
+openai
+chardet
+numpy
+logfire
