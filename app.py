@@ -401,35 +401,36 @@ else:
         )
         with st.chat_message("assistant"):
             with st.spinner("공모주 핵심 정보 수집 및 분석 중..."):
-                # 1. 크롤링으로 1~5번 데이터 가져오기
-                web_info = get_ipo_info_from_web(deps.corp_name)
+                # 1. 크롤링으로 1~5번 데이터 가져오기 (함수명 수정!)
+                web_info_df = get_ipo_schedule(deps.corp_name)
                 
                 # 2. AI로 6~7번(청약일정, 위험요인) 요약 가져오기
                 overview_ai, sources = get_answer(overview_prompt, deps, [])
 
             # 3. 크롤링 텍스트 예쁘게 만들기
-            if web_info:
+            if not web_info_df.empty:
+                web_info = web_info_df.iloc[0].to_dict()
                 web_text = (
-                    f"1. **종목명**: {web_info['종목명']}\n"
-                    f"2. **수요예측일**: {web_info['수요예측일']}\n"
-                    f"3. **희망공모가**: {web_info['희망공모가']}\n"
-                    f"4. **확정공모가**: {web_info['확정공모가']}원\n"
-                    f"5. **공모금액**: {web_info['공모금액']}\n"
-                    f"6. **주간사**: {web_info['주간사']}\n"
+                    f"1. **종목명**: {web_info.get('종목명', 'N/A')}\n"
+                    f"2. **수요예측일**: {web_info.get('수요예측일', 'N/A')}\n"
+                    f"3. **희망공모가**: {web_info.get('희망공모가(원)', 'N/A')}\n"
+                    f"4. **확정공모가**: {web_info.get('확정공모가', 'N/A')}\n"
+                    f"5. **공모금액**: {web_info.get('공모금액(백만)', 'N/A')}백만원\n"
+                    f"6. **주간사**: {web_info.get('주간사', 'N/A')}\n"
                 )
             else:
-                web_text = "⚠️ 웹 크롤링을 통한 실시간 공모 정보(1~6번)를 불러오지 못했습니다.\n"
+                web_text = "⚠️ **웹 검색 알림**: 38커뮤니케이션의 현재 수요예측/청약 일정 표에서 해당 기업을 찾지 못했습니다.\n"
 
-            # 4. 최종 인사말 완성 (크롤링 텍스트 + AI 텍스트)
+            # 4. 최종 인사말 완성
             greeting = (
                 f"안녕하세요! 이 챗봇은 **{deps.corp_name}** 투자설명서를 분석해서 "
                 f"공모가, 재무상태, 위험요인 등을 쉽게 알려드릴 수 있어요. "
                 f"공모주에 대한 원본 공시 자료는 [DART에서 확인]({dart_link})해보세요.\n\n"
                 f"---\n\n"
                 f"**📋 {deps.corp_name} 공모주 개요**\n\n"
-                f"{web_text}\n"  # 크롤링 정보
+                f"{web_text}\n" 
                 f"**AI 추가 분석 (DART 기준):**\n"
-                f"{overview_ai}\n\n" # AI 정보
+                f"{overview_ai}\n\n"
                 f"---\n\n"
                 f"⚠️ *본 정보는 웹 크롤링 및 AI 공시 자료 분석을 바탕으로 요약한 것이며, 실제 투자 결정의 책임은 본인에게 있습니다.*"
             )
