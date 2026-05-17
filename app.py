@@ -9,7 +9,10 @@ from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 import dart_fss as dart
+
 import re
+import pandas as pd     # 추가!
+import requests
 
 # ─── API 설정 ────────────────────────────────────────────
 DART_API_KEY = st.secrets["DART_API_KEY"]
@@ -42,6 +45,50 @@ def load_embedding_model():
     return SentenceTransformer("jhgan/ko-sbert-multitask")
 
 # ─── 핵심 로직 함수들 ────────────────────────────────────
+@st.cache_data(ttl=3600)  # 1시간 동안 데이터 캐싱 (사이트 밴 방지)
+def get_ipo_schedule(corp_name):
+    """38.co.kr 수요예측일정 표 크롤링"""
+    url = "http://www.38.co.kr/html/fund/index.htm?o=r"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.encoding = 'euc-kr' # 한글 깨짐 방지
+        
+        # 웹페이지의 모든 표(table)를 가져옴
+        tables = pd.read_html(response.text)
+        
+        target_df = None
+        # '종목명'이라는 단어가 들어간 진짜 표를 찾기
+        for df in tables:
+            # 첫 번째 행이나 컬럼에 '종목명'이 있는지 확인
+            if '종목명' in df.columns or (not df.empty and '종목명' in str(df.iloc[0].values)):
+                if not '종목명' in df.columns:
+                    df.columns = df.iloc[0] # 첫 줄을 헤더로
+                    df = df[1:]
+                target_df = df
+                break
+                
+        if target_df is not None:
+            # 우리가 딱 원하는 6개 컬럼만 필터링
+            desired_cols = ['종목명', '수요예측일', '희망공모가(원)', '확정공모가', '공모금액(백만)', '주간사']
+            existing_cols = [c for c in desired_cols if c in target_df.columns]
+            target_df = target_df[existing_cols]
+            
+            # 검색한 기업명으로 필터링 (예: '케이뱅크')
+            # 38커뮤니케이션은 '케이뱅크(유가)' 처럼 뒤에 괄호가 붙는 경우가 있어 contains 사용
+            result = target_df[target_df['종목명'].str.contains(corp_name[:2], na=False, case=False)]
+            
+            return result
+        else:
+            return pd.DataFrame() # 표를 못 찾은 경우 빈 데이터프레임 반환
+            
+    except Exception as e:
+        print(f"크롤링 에러: {e}")
+        return pd.DataFrame()
+
+
+
 def split_text(text, chunk_size=1500, overlap=150):
     chunks = []
     start = 0
@@ -299,30 +346,85 @@ else:
                         st.caption(s)
 
     # 처음 접속 시 공모주 개요 자동 생성
+    # if not st.session_state.initial_shown:
+    #     dart_link = f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={deps.rcept_no}"
+    #     overview_prompt = (
+    #         "이 공모주의 개요를 아래 항목으로 요약해줘: "
+    #         "증권의 종류, 공모주식 수, 1주당 공모가격, 총 모집금액, 청약일정, 자금 사용목적, 주요 위험요인. "
+    #         "각 항목을 번호 목록으로 정리하되, "
+    #         "★주의: 제공된 문서 내용에 정확한 수치나 날짜가 없다면 절대로 지어내지 말고 '문서에서 검색되지 않음'이라고만 적어. "
+    #         "금융 초보자도 이해할 수 있도록 쉬운 말로 설명해줘."
+    #     )
+
+    #     with st.chat_message("assistant"):
+    #         with st.spinner("공모주 개요 분석 중..."):
+    #             overview, sources = get_answer(overview_prompt, deps, [])
+
+    #         greeting = (
+    #             f"안녕하세요! 이 챗봇은 **{deps.corp_name}** 투자설명서를 분석해서 "
+    #             f"공모가, 재무상태, 위험요인 등을 쉽게 알려드릴 수 있어요. "
+    #             f"공모주에 대한 원본 공시 자료는 [DART에서 확인]({dart_link})해보세요.\n\n"
+    #             f"---\n\n"
+    #             f"**📋 {deps.corp_name} 공모주 개요**\n\n"
+    #             f"{overview}\n\n"
+    #             f"---\n\n"
+    #             f"⚠️ *본 정보는 AI가 공시 자료를 바탕으로 요약한 것이며, "
+    #             f"실제 투자 결정의 책임은 본인에게 있습니다.*"
+    #         )
+
+    #         st.markdown(greeting)
+    #         with st.expander("📚 참고한 문서 위치"):
+    #             for s in sources:
+    #                 st.caption(s)
+
+    #     st.session_state.messages.append({
+    #         "role": "assistant",
+    #         "content": greeting,
+    #         "sources": sources
+    #     })
+    #     st.session_state.chat_history.append({"role": "assistant", "content": greeting})
+    #     st.session_state.initial_shown = True
+
     if not st.session_state.initial_shown:
         dart_link = f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={deps.rcept_no}"
         overview_prompt = (
-            "이 공모주의 개요를 아래 항목으로 요약해줘: "
-            "증권의 종류, 공모주식 수, 1주당 공모가격, 총 모집금액, 청약일정, 자금 사용목적, 주요 위험요인. "
-            "각 항목을 번호 목록으로 정리하되, "
-            "★주의: 제공된 문서 내용에 정확한 수치나 날짜가 없다면 절대로 지어내지 말고 '문서에서 검색되지 않음'이라고만 적어. "
-            "금융 초보자도 이해할 수 있도록 쉬운 말로 설명해줘."
+            "이 공모주의 1. 청약일정, 2. 주요 위험요인을 요약해줘. "
+            "각 항목을 번호 목록으로 정리하고, 금융 초보자도 이해할 수 있도록 쉬운 말로 설명해줘. "
+            "문서에 정보가 없으면 지어내지 말고 '문서에서 확인할 수 없습니다'라고 적어."
         )
-
         with st.chat_message("assistant"):
-            with st.spinner("공모주 개요 분석 중..."):
-                overview, sources = get_answer(overview_prompt, deps, [])
+            with st.spinner("공모주 핵심 정보 수집 및 분석 중..."):
+                # 1. 크롤링으로 1~5번 데이터 가져오기
+                web_info = get_ipo_info_from_web(deps.corp_name)
+                
+                # 2. AI로 6~7번(청약일정, 위험요인) 요약 가져오기
+                overview_ai, sources = get_answer(overview_prompt, deps, [])
 
+            # 3. 크롤링 텍스트 예쁘게 만들기
+            if web_info:
+                web_text = (
+                    f"1. **종목명**: {web_info['종목명']}\n"
+                    f"2. **수요예측일**: {web_info['수요예측일']}\n"
+                    f"3. **희망공모가**: {web_info['희망공모가']}\n"
+                    f"4. **확정공모가**: {web_info['확정공모가']}원\n"
+                    f"5. **공모금액**: {web_info['공모금액']}\n"
+                    f"6. **주간사**: {web_info['주간사']}\n"
+                )
+            else:
+                web_text = "⚠️ 웹 크롤링을 통한 실시간 공모 정보(1~6번)를 불러오지 못했습니다.\n"
+
+            # 4. 최종 인사말 완성 (크롤링 텍스트 + AI 텍스트)
             greeting = (
                 f"안녕하세요! 이 챗봇은 **{deps.corp_name}** 투자설명서를 분석해서 "
                 f"공모가, 재무상태, 위험요인 등을 쉽게 알려드릴 수 있어요. "
                 f"공모주에 대한 원본 공시 자료는 [DART에서 확인]({dart_link})해보세요.\n\n"
                 f"---\n\n"
                 f"**📋 {deps.corp_name} 공모주 개요**\n\n"
-                f"{overview}\n\n"
+                f"{web_text}\n"  # 크롤링 정보
+                f"**AI 추가 분석 (DART 기준):**\n"
+                f"{overview_ai}\n\n" # AI 정보
                 f"---\n\n"
-                f"⚠️ *본 정보는 AI가 공시 자료를 바탕으로 요약한 것이며, "
-                f"실제 투자 결정의 책임은 본인에게 있습니다.*"
+                f"⚠️ *본 정보는 웹 크롤링 및 AI 공시 자료 분석을 바탕으로 요약한 것이며, 실제 투자 결정의 책임은 본인에게 있습니다.*"
             )
 
             st.markdown(greeting)
@@ -330,6 +432,7 @@ else:
                 for s in sources:
                     st.caption(s)
 
+        # 세션에 저장
         st.session_state.messages.append({
             "role": "assistant",
             "content": greeting,
@@ -337,6 +440,9 @@ else:
         })
         st.session_state.chat_history.append({"role": "assistant", "content": greeting})
         st.session_state.initial_shown = True
+
+
+
 
     # 채팅 입력
     if prompt := st.chat_input(f"{deps.corp_name}에 대해 궁금한 것을 물어보세요!"):
