@@ -127,7 +127,7 @@ def embed_document(deps):
     deps.embedding_model = model
     deps.chunks = split_text(deps.raw_text)
     texts_to_embed = [chunk["text"] for chunk in deps.chunks]
-    deps.chunk_embeddings = model.encode(deps.chunks, normalize_embeddings=True)
+    deps.chunk_embeddings = model.encode(texts_to_embed, normalize_embeddings=True)
 
 def get_answer(question, deps, chat_history):
     """RAG로 관련 문서 검색 후 LLM 답변 생성"""
