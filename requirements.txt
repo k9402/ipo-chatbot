@@ -9,3 +9,6 @@ openai
 chardet
 numpy
 logfire
+pandas
+requests
+lxml
