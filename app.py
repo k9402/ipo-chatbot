@@ -113,7 +113,7 @@ def get_answer(question, deps, chat_history):
     """RAG로 관련 문서 검색 후 LLM 답변 생성"""
     query_vec = deps.embedding_model.encode([question], normalize_embeddings=True)
     similarities = np.dot(deps.chunk_embeddings, query_vec.T).flatten()
-    top_indices = np.argsort(similarities)[-5:][::-1]
+    top_indices = np.argsort(similarities)[-3:][::-1]
 
     context = "\n\n".join([deps.chunks[i] for i in top_indices])
     system_msg = {
@@ -277,7 +277,9 @@ else:
         overview_prompt = (
             "이 공모주의 개요를 아래 항목으로 요약해줘: "
             "증권의 종류, 공모주식 수, 1주당 공모가격, 총 모집금액, 청약일정, 자금 사용목적, 주요 위험요인. "
-            "각 항목을 번호 목록으로 정리하고, 금융 초보자도 이해할 수 있도록 쉬운 말로 설명해줘."
+            "각 항목을 번호 목록으로 정리하되, "
+            "★주의: 제공된 문서 내용에 정확한 수치나 날짜가 없다면 절대로 지어내지 말고 '문서에서 검색되지 않음'이라고만 적어. "
+            "금융 초보자도 이해할 수 있도록 쉬운 말로 설명해줘."
         )
 
         with st.chat_message("assistant"):
