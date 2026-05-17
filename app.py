@@ -47,44 +47,52 @@ def load_embedding_model():
 # ─── 핵심 로직 함수들 ────────────────────────────────────
 @st.cache_data(ttl=3600)  # 1시간 동안 데이터 캐싱 (사이트 밴 방지)
 
-def get_ipo_info_from_web(corp_name):
-    """38.co.kr에서 특정 기업의 핵심 정보만 딕셔너리로 뽑아옵니다."""
-    url = "http://www.38.co.kr/html/fund/index.htm?o=r"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+@st.cache_data(ttl=3600)  # 1시간 동안 데이터 캐싱
+def get_ipo_schedule(corp_name):
+    """38.co.kr 수요예측 및 청약일정 표 모두 크롤링"""
+    # 수요예측 페이지, 공모청약 페이지 두 곳을 모두 뒤집니다.
+    urls = [
+        "http://www.38.co.kr/html/fund/index.htm?o=r",  # 수요예측
+        "http://www.38.co.kr/html/fund/index.htm?o=k"   # 공모청약
+    ]
+    
+    # 봇 차단을 막기 위해 일반 브라우저처럼 위장
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    combined_df = pd.DataFrame()
     
     try:
-        response = requests.get(url, headers=headers)
-        response.encoding = 'euc-kr'
-        tables = pd.read_html(response.text)
-        
-        target_df = None
-        for df in tables:
-            if '종목명' in df.columns or (not df.empty and '종목명' in str(df.iloc[0].values)):
-                if not '종목명' in df.columns:
-                    df.columns = df.iloc[0]
-                    df = df[1:]
-                target_df = df
-                break
-                
-        if target_df is not None:
-            # 기업명으로 해당 줄 찾기
-            result = target_df[target_df['종목명'].str.contains(corp_name[:2], na=False, case=False)]
+        for url in urls:
+            response = requests.get(url, headers=headers)
+            response.encoding = 'euc-kr'
             
-            if not result.empty:
-                # 첫 번째 매칭된 결과의 값을 딕셔너리로 저장해서 반환!
-                row = result.iloc[0]
-                return {
-                    "종목명": str(row.get('종목명', '확인 불가')),
-                    "수요예측일": str(row.get('수요예측일', '확인 불가')),
-                    "희망공모가": str(row.get('희망공모가(원)', '확인 불가')),
-                    "확정공모가": str(row.get('확정공모가', '확인 불가')),
-                    "공모금액": str(row.get('공모금액(백만)', '확인 불가')) + "백만원",
-                    "주간사": str(row.get('주간사', '확인 불가'))
-                }
+            tables = pd.read_html(response.text)
+            
+            for df in tables:
+                if '종목명' in df.columns or (not df.empty and '종목명' in str(df.iloc[0].values)):
+                    if not '종목명' in df.columns:
+                        df.columns = df.iloc[0]
+                        df = df[1:]
+                    
+                    # 두 페이지의 표 데이터 합치기
+                    combined_df = pd.concat([combined_df, df], ignore_index=True)
+                    break # 해당 페이지에서 표를 찾았으면 다음 URL로 넘어감
+                    
+        if not combined_df.empty:
+            desired_cols = ['종목명', '수요예측일', '공모청약일', '희망공모가(원)', '확정공모가', '공모금액(백만)', '주간사']
+            existing_cols = [c for c in desired_cols if c in combined_df.columns]
+            combined_df = combined_df[existing_cols]
+            
+            result = combined_df[combined_df['종목명'].str.contains(corp_name[:2], na=False, case=False)]
+            return result
+        else:
+            return pd.DataFrame()
+            
     except Exception as e:
         print(f"크롤링 에러: {e}")
-        
-    return None # 못 찾으면 None 반환
+        return pd.DataFrame()
 
 
 
