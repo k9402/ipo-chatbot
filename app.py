@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 import dart_fss as dart
+import re
 
 # ─── API 설정 ────────────────────────────────────────────
 DART_API_KEY = st.secrets["DART_API_KEY"]
@@ -44,8 +45,26 @@ def load_embedding_model():
 def split_text(text, chunk_size=1500, overlap=150):
     chunks = []
     start = 0
+    current_section = "문서 시작 부분" # 기본 제목
+    
+    # '1.', 'I.', '제1부' 등 공시 문서의 목차 패턴을 찾는 공식
+    section_pattern = re.compile(r'^(제\s*[1-9]+\s*부|I{1,3}V?\.|[1-9]+\.)\s+')
+
     while start < len(text):
-        chunks.append(text[start:start + chunk_size])
+        chunk_text = text[start:start + chunk_size]
+        
+        # 쪼갠 텍스트 안에서 목차 제목이 등장하면 업데이트
+        for line in chunk_text.split('\n'):
+            line = line.strip()
+            # 40자 이내의 짧은 문장 중 목차 패턴과 일치하면 제목으로 저장!
+            if len(line) < 40 and section_pattern.match(line):
+                current_section = line
+        
+        # 텍스트와 목차 제목을 한 세트(딕셔너리)로 묶어서 보관
+        chunks.append({
+            "text": chunk_text,
+            "section": current_section
+        })
         start += (chunk_size - overlap)
     return chunks
 
@@ -107,6 +126,7 @@ def embed_document(deps):
     model = load_embedding_model()
     deps.embedding_model = model
     deps.chunks = split_text(deps.raw_text)
+    texts_to_embed = [chunk["text"] for chunk in deps.chunks]
     deps.chunk_embeddings = model.encode(deps.chunks, normalize_embeddings=True)
 
 def get_answer(question, deps, chat_history):
@@ -115,7 +135,7 @@ def get_answer(question, deps, chat_history):
     similarities = np.dot(deps.chunk_embeddings, query_vec.T).flatten()
     top_indices = np.argsort(similarities)[-3:][::-1]
 
-    context = "\n\n".join([deps.chunks[i] for i in top_indices])
+    context = "\n\n".join([deps.chunks[i]["text"] for i in top_indices])
     system_msg = {
         "role": "system",
         "content": (
@@ -140,8 +160,15 @@ def get_answer(question, deps, chat_history):
 
     sources = []
     for i, idx in enumerate(top_indices):
-        hint = deps.chunks[idx].strip()[:60].replace('\n', ' ')
-        sources.append(f"{i+1}위: {hint}...")
+        chunk_info = deps.chunks[idx]
+        
+        # 목차 이름 꺼내오기
+        section_name = chunk_info["section"]
+        # 텍스트 미리보기 (40자로 조금 짧게)
+        hint = chunk_info["text"].strip()[:40].replace('\n', ' ')
+        
+        # 1위: [1. 모집의 개요] 공모가는 어쩌구... 형태로 완성!
+        sources.append(f"{i+1}위: [{section_name}] {hint}...")
 
     return answer, sources
 
