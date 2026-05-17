@@ -46,46 +46,45 @@ def load_embedding_model():
 
 # ─── 핵심 로직 함수들 ────────────────────────────────────
 @st.cache_data(ttl=3600)  # 1시간 동안 데이터 캐싱 (사이트 밴 방지)
-def get_ipo_schedule(corp_name):
-    """38.co.kr 수요예측일정 표 크롤링"""
+
+def get_ipo_info_from_web(corp_name):
+    """38.co.kr에서 특정 기업의 핵심 정보만 딕셔너리로 뽑아옵니다."""
     url = "http://www.38.co.kr/html/fund/index.htm?o=r"
     headers = {'User-Agent': 'Mozilla/5.0'}
     
     try:
         response = requests.get(url, headers=headers)
-        response.encoding = 'euc-kr' # 한글 깨짐 방지
-        
-        # 웹페이지의 모든 표(table)를 가져옴
+        response.encoding = 'euc-kr'
         tables = pd.read_html(response.text)
         
         target_df = None
-        # '종목명'이라는 단어가 들어간 진짜 표를 찾기
         for df in tables:
-            # 첫 번째 행이나 컬럼에 '종목명'이 있는지 확인
             if '종목명' in df.columns or (not df.empty and '종목명' in str(df.iloc[0].values)):
                 if not '종목명' in df.columns:
-                    df.columns = df.iloc[0] # 첫 줄을 헤더로
+                    df.columns = df.iloc[0]
                     df = df[1:]
                 target_df = df
                 break
                 
         if target_df is not None:
-            # 우리가 딱 원하는 6개 컬럼만 필터링
-            desired_cols = ['종목명', '수요예측일', '희망공모가(원)', '확정공모가', '공모금액(백만)', '주간사']
-            existing_cols = [c for c in desired_cols if c in target_df.columns]
-            target_df = target_df[existing_cols]
-            
-            # 검색한 기업명으로 필터링 (예: '케이뱅크')
-            # 38커뮤니케이션은 '케이뱅크(유가)' 처럼 뒤에 괄호가 붙는 경우가 있어 contains 사용
+            # 기업명으로 해당 줄 찾기
             result = target_df[target_df['종목명'].str.contains(corp_name[:2], na=False, case=False)]
             
-            return result
-        else:
-            return pd.DataFrame() # 표를 못 찾은 경우 빈 데이터프레임 반환
-            
+            if not result.empty:
+                # 첫 번째 매칭된 결과의 값을 딕셔너리로 저장해서 반환!
+                row = result.iloc[0]
+                return {
+                    "종목명": str(row.get('종목명', '확인 불가')),
+                    "수요예측일": str(row.get('수요예측일', '확인 불가')),
+                    "희망공모가": str(row.get('희망공모가(원)', '확인 불가')),
+                    "확정공모가": str(row.get('확정공모가', '확인 불가')),
+                    "공모금액": str(row.get('공모금액(백만)', '확인 불가')) + "백만원",
+                    "주간사": str(row.get('주간사', '확인 불가'))
+                }
     except Exception as e:
         print(f"크롤링 에러: {e}")
-        return pd.DataFrame()
+        
+    return None # 못 찾으면 None 반환
 
 
 
