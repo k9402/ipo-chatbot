@@ -47,7 +47,6 @@ def load_embedding_model():
 # ─── 핵심 로직 함수들 ────────────────────────────────────
 @st.cache_data(ttl=3600)  # 1시간 동안 데이터 캐싱 (사이트 밴 방지)
 
-@st.cache_data(ttl=3600)  # 1시간 동안 데이터 캐싱
 def get_ipo_schedule(corp_name):
     """38.co.kr 수요예측 및 청약일정 표 모두 크롤링"""
     # 수요예측 페이지, 공모청약 페이지 두 곳을 모두 뒤집니다.
@@ -248,6 +247,9 @@ with st.sidebar:
     st.title("📈 AI 공모주 가이드")
     st.caption("복잡한 공모주 자료, 챗봇으로 쉽게!")
     st.divider()
+    if st.button("🗑️ 캐시 완전 초기화", use_container_width=True):
+            st.cache_data.clear() # 모든 캐시 날리기
+            st.rerun() # 앱 새로고침
 
     st.subheader("🏢 기업 선택")
 
