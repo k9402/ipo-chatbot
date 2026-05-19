@@ -14,7 +14,7 @@ import re
 # ─── API 설정 ────────────────────────────────────────────
 # ─── API 설정 ────────────────────────────────────────────
 # 아래 따옴표 안에 실제 API 키 값을 그대로 붙여넣으세요.
-DART_API_KEY = "13587b9fa967caa53ab7c2b07353a2b42aacb98"
+DART_API_KEY = "13587b9fa967caa53ab7c2b07353a2b42aacb985"
 UPSTAGE_API_KEY = "up_92OyJUg1jW8pGtodKl1yrvsvIt2Vv"
 
 dart.set_api_key(api_key=DART_API_KEY)
