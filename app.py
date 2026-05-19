@@ -153,7 +153,7 @@ def get_answer(question, deps, chat_history):
 
     messages = [system_msg] + chat_history + [{"role": "user", "content": question}]
     response = client.chat.completions.create(
-        model="solar-1-mini-chat",
+        model="solar-pro3",
         messages=messages
     )
     answer = response.choices[0].message.content
