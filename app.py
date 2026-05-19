@@ -12,11 +12,22 @@ import dart_fss as dart
 import re
 
 # ─── API 설정 ────────────────────────────────────────────
-DART_API_KEY = st.secrets["DART_API_KEY"]
-UPSTAGE_API_KEY = st.secrets["UPSTAGE_API_KEY"]
+# ─── API 설정 ────────────────────────────────────────────
+# 아래 따옴표 안에 실제 API 키 값을 그대로 붙여넣으세요.
+DART_API_KEY = "13587b9fa967caa53ab7c2b07353a2b42aacb98"
+UPSTAGE_API_KEY = "up_92OyJUg1jW8pGtodKl1yrvsvIt2Vv"
 
 dart.set_api_key(api_key=DART_API_KEY)
-client = OpenAI(api_key=UPSTAGE_API_KEY, base_url="https://api.upstage.ai/v1/solar")
+# 아까 수정한 대로 base_url 끝에 /solar는 뺀 상태입니다!
+client = OpenAI(api_key=UPSTAGE_API_KEY, base_url="https://api.upstage.ai/v1")
+
+
+
+# DART_API_KEY = st.secrets["DART_API_KEY"]
+# UPSTAGE_API_KEY = st.secrets["UPSTAGE_API_KEY"]
+
+# dart.set_api_key(api_key=DART_API_KEY)
+# client = OpenAI(api_key=UPSTAGE_API_KEY, base_url="https://api.upstage.ai/v1/solar")
 
 # ─── 데이터 구조 ─────────────────────────────────────────
 @dataclasses.dataclass
